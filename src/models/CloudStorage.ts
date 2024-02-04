@@ -30,13 +30,21 @@ export class CloudStorage extends EndpointOperator implements IDataOperator{
         if(targetEndpoint == null)
             return;
 
-        this.connectionTable[data.requestId] = data.origin;
         this.fireReceiveData(data);
+        this.requestReceived();
 
-        await this.sendData(this.getResponse(data));
+        this.connectionTable[data.requestId] = data.origin;
+
+        if(!await this.throttleThroughput(5000)){
+            this.requestProcessed();
+            return;
+        }
+
+        // Send response back
+        this.requestProcessed();
+        if(data.sendResponse)
+            await this.sendData(this.getResponse(data));
     }
-
-    onConnectionUpdate(wasOutput: boolean = false){}
 
     async sendData(response: RequestData) {
         let targetConnection = this.connectionTable[response.responseId]
@@ -45,11 +53,7 @@ export class CloudStorage extends EndpointOperator implements IDataOperator{
         this.connectionTable[response.responseId] = null; // reset request id
         await this.inputPort.sendData(response, targetConnection);
     }
-
-    getAvailableEndpoints(): Endpoint[]{
-        return this.options.endpoints;
-    }
 }
 
 export class CloudStorageOptions extends EndpointOptions{
-}
+}    

@@ -1,12 +1,12 @@
-import { IDataOperator } from "src/interfaces/IDataOperator";
+import { IDataOperator, ReceiveDataEvent } from "src/interfaces/IDataOperator";
 import { Connection } from "./Connection";
 import { RequestData } from "./RequestData";
 import { Port } from "./Port";
-import { Endpoint, EndpointRef, MQEndpoint } from "./Endpoint";
+import { Endpoint, EndpointRef } from "./Endpoint";
 import { sleep, UUID } from "src/shared/ExtensionMethods";
-import { API } from "./API";
 import { EndpointOperator, EndpointOptions } from "./EndpointOperator";
 import { HTTPMethod } from "./enums/HTTPMethod";
+import { EventDispatcher, Handler } from "./Shared/EventDispatcher";
 
 export class MessageQueue extends EndpointOperator implements IDataOperator{
 
@@ -20,7 +20,6 @@ export class MessageQueue extends EndpointOperator implements IDataOperator{
     color = "#F2994A";
 
     messages: RequestData[] = []
-    isConsumable: boolean = true;
 
     constructor() {
         super();
@@ -30,7 +29,7 @@ export class MessageQueue extends EndpointOperator implements IDataOperator{
         this.options.title = "Message Queue";
 
         this.options.endpoints = [
-            new MQEndpoint()
+            new Endpoint("MessageQueue", [HTTPMethod.GET, HTTPMethod.POST, HTTPMethod.PUT, HTTPMethod.DELETE, HTTPMethod.PATCH])
         ];
     }
 
@@ -38,13 +37,15 @@ export class MessageQueue extends EndpointOperator implements IDataOperator{
         if(data.requestId == "" || data.requestId == null )
             throw new Error("requestId can not be null. Please specify property requestId of RequestData");
 
-        this.fireReceiveData(data);
 
         // Put data to queue 
         data.header.stream = false;
         this.messages.push(data);
         if(!this.isSendingData)
             this.sendToConsumer();
+
+        this.fireReceiveData(data);
+        this.requestReceived();
 
         // Return response to publisher
         let response = new RequestData();
@@ -53,22 +54,38 @@ export class MessageQueue extends EndpointOperator implements IDataOperator{
         response.header = data.header;
         response.origin = data.origin;
         response.originID = this.originID;
-        await this.inputPort.sendData(response, data.origin);
+        // Send response back
+        this.requestProcessed();
+        if(data.sendResponse)
+            await this.inputPort.sendData(response, data.origin);
     }
 
     async sendToConsumer(){
         if(this.messages.length == 0 || this.outputPort.connections.length == 0)
             return;
+        console.log("send")
         this.isSendingData = true;
-        await sleep(400);
+        if(!this.isFlowSimulationOn){
+            await sleep(400);
+        }
+        else{
+            if(!await this.throttleThroughput(5000)){
+                console.log("drop");
+                this.requestProcessed();
+                return;
+            }
+        }
+        console.log("continue");
 
         let message = this.messages.pop();
         let epRef = new EndpointRef();
         epRef.endpoint = new Endpoint(this.options.endpoints[0].url, [HTTPMethod.GET, HTTPMethod.POST, HTTPMethod.PUT, HTTPMethod.PATCH, HTTPMethod.DELETE]);
         epRef.method = HTTPMethod.POST;
         message.header.endpoint = epRef;
+        message.sendResponse = false;
 
         this.sendData(message);
+        this.fireSendData({});
     
         if(this.messages.length == 0)
             this.isSendingData = false;
@@ -82,11 +99,18 @@ export class MessageQueue extends EndpointOperator implements IDataOperator{
     }
 
     async roundRobin(data: RequestData){
-        let nodesLength = this.outputPort.connections.length;
+        let connections = this.outputPort.connections
+        .filter(conn => conn.getOtherPort(this.outputPort).parent.getAvailableEndpoints()
+        .find(ep => ep.url === this.options.endpoints[0].url) != null);
+        let nodesLength = connections.length;
+        if(nodesLength === 0){
+            this.messages.push(data);
+            return;
+        }
+        this.fireSendData({});
         this.roundRobinIndex++;
         if(this.roundRobinIndex >= nodesLength)
             this.roundRobinIndex = 0;
-
         data.origin = this.outputPort.connections[this.roundRobinIndex];
         await this.outputPort.sendData(data,data.origin);
     }
@@ -95,35 +119,12 @@ export class MessageQueue extends EndpointOperator implements IDataOperator{
         this.sendToConsumer();
     }
 
-    connectTo(operator: IDataOperator, connectingWithOutput: boolean, connectingToOutput: boolean) : Connection{
-        let otherPort = operator.getPort(connectingToOutput);
-        if(!this.canConnectTo(otherPort, connectingWithOutput)) 
-            return null;
-        if(!operator.canConnectTo(this.getPort(connectingWithOutput), connectingToOutput)) 
-            return null; 
-        if(connectingWithOutput){
-            let conn = this.outputPort.connectTo(otherPort);
-            if(conn != null && operator instanceof API)
-                (operator as API).initiateConsumer(conn);
-            return conn;
-        }
-        return this.inputPort.connectTo(otherPort);
+    private sendDataDispatcher = new EventDispatcher<ReceiveDataEvent>();
+    public onSendData(handler: Handler<ReceiveDataEvent>) {
+        this.sendDataDispatcher.register(handler);
     }
-
-    canConnectTo(port: Port, connectingWithOutput: boolean){
-        if(!super.canConnectTo(port, connectingWithOutput))
-            return false;
-        // Output of MQ can connect only to API  
-        if(!connectingWithOutput)
-            return true;
-        if(port.parent instanceof API)
-            return true;
-        this.fireFailedConnect({message: "Output of a Message Queue can only be conencted to an API"});
-        return false;
-    }
-
-    getAvailableEndpoints(): Endpoint[]{
-        return this.options.endpoints;
+    private fireSendData(event: ReceiveDataEvent) { 
+        this.sendDataDispatcher.fire(event);
     }
 }
 

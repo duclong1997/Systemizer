@@ -38,8 +38,6 @@ export class Client extends LogicComponent implements IDataOperator{
         }
     }
 
-    onConnectionUpdate(wasOutput: boolean = false){}
-
     async sendData(data: RequestData) {
         this.updateEndpoint();
         return await this.outputPort.sendData(data);
@@ -87,4 +85,5 @@ export class Client extends LogicComponent implements IDataOperator{
 export class ClientOptions extends Options{
     protocol: Protocol = Protocol.HTTP; // Is decided by endpoint, cannot be changed from client
     endpointRef: EndpointRef = new EndpointRef();
+    outputRate: number = 4;
 }

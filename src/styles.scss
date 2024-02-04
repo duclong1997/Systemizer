@@ -164,6 +164,11 @@ a{
 li{
     list-style: none;
 }
+.mt{
+    > div{
+        margin-top: 1em;
+    }
+}
 .button-icon{
     width: 1em;
     height: 1em;
@@ -175,6 +180,10 @@ li{
     &:hover{
         transform: scale(1.2);
     }
+}
+.dropped-data{
+    transition: transform 0.6s ease-out, opacity 0.8s ease-in;
+    fill: #31B78D;
 }
 .nav-list{
     display:flex;
@@ -213,8 +222,8 @@ li{
 }
 .options-menu-window{
     position: absolute;
-    top: 30%;
-    bottom: 30%;
+    top: 28%;
+    bottom: 24%;
     right: 0;
     min-height: 350px;
     width: 18.5rem;
@@ -253,6 +262,21 @@ li{
         display: flex;
         flex-flow: column nowrap;
         gap: 0.3em;
+    }
+    & .async-check{
+        color: rgb(133, 133, 133);
+        padding-inline: 0.25em;
+        cursor: pointer;
+        &.checked{
+            opacity: 1;
+            color: var(--main);
+            font-weight: bold;
+            transform: scale(1.1);
+        }
+        &.disabled{
+            pointer-events: none;
+            filter: grayscale(1);
+        }
     }
     & .section{
         & .header{
@@ -362,6 +386,14 @@ li{
         display: flex;
         flex-flow: row nowrap;
         justify-content: space-between;
+        & .property-name{
+            font-size: 1em !important;
+        }
+        & > div{
+            display: flex;
+            flex-flow: row nowrap;
+            gap: .5em;
+        }
     }
     & mat-form-field{
         font-weight: normal;
@@ -582,6 +614,48 @@ mat-tooltip-component .mat-tooltip{
 }
 .mat-slider-horizontal .mat-slider-track-wrapper{
     filter: brightness(0.5) !important;
+}
+.mat-slider-min-value.mat-slider-thumb-label-showing .mat-slider-thumb, .mat-slider-min-value.mat-slider-thumb-label-showing .mat-slider-thumb-label{
+    background-color: var(--text);
+}
+.mat-checkbox-indeterminate.mat-accent .mat-checkbox-background, .mat-checkbox-checked.mat-accent .mat-checkbox-background{
+    background: var(--main);
+    svg path{
+        stroke: var(--background-dark) !important;
+    }
+}
+.mat-checkbox-background{
+    border: 0.1rem solid var(--border);
+}
+.mat-checkbox-disabled .mat-checkbox-label{
+    color: var(--text);
+    opacity: 0.7;
+}
+.mat-checkbox-disabled.mat-accent .mat-checkbox-background{
+    filter: grayscale(1);
+}
+.mat-slider-description{
+    width: 80%;
+    padding-inline: 0.5em;
+    margin-top: -0.9em;
+    display: flex;
+    font-size: 0.75em;
+    justify-content: space-between;
+    &.low{
+        & > *:nth-child(1){
+            color: var(--main);
+        }
+    }
+    &.medium{
+        & > *:nth-child(2){
+            color: var(--main);
+        }
+    }
+    &.high{
+        & > *:nth-child(3){
+            color: var(--main);
+        }
+    }
 }
 
 .fs-1{

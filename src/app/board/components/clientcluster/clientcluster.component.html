@@ -5,7 +5,7 @@
 [style.top.px]="LogicClientCluster.options.Y"
 >
     <template #conn></template>
-    <div class="img-container" (mousedown)="handleMousedown( $event )"
+    <div class="img-container" (mousedown)="handleMousedown( $event )" (touchstart)="handleMousedown($event)"
     (click)="handleClick($event)">
         <img src="./assets/clientcluster.svg">
     </div>    
@@ -13,29 +13,22 @@
 <div *ngIf="isReadOnly" 
 [style.left.px]="LogicClientCluster.options.X "
 [style.top.px]="LogicClientCluster.options.Y" class="read-only-controls">
-    <button *ngIf="!LogicClientCluster.isSendingData" (click)="LogicClientCluster.startSendingData()">
+    <button *ngIf="!LogicClientCluster.isSendingData" (click)="LogicClientCluster.startSendingData(); cdRef.detectChanges()">
         <img src="./assets/send.svg">
     </button>
-    <button *ngIf="LogicClientCluster.isSendingData" (click)="LogicClientCluster.stopSendingData()">
+    <button *ngIf="LogicClientCluster.isSendingData" (click)="LogicClientCluster.stopSendingData(); cdRef.detectChanges()">
         <img src="./assets/send.svg" style="transform: rotateY(180deg);">
     </button>
 </div>
 <div style="display:none">
     <div #options>
-        <div>
-            <span class="property-name endpoint-title">Requests per minute: <info-tooltip [Message]="'Changes the speed at which data is sent.'"></info-tooltip></span>
-            <div class="endpoint-protocol">
-                <mat-slider
-                    thumbLabel
-                    [(ngModel)]="LogicClientCluster.options.requestsPerMinute"
-                    tickInterval="10"
-                    step="10"
-                    min="10"
-                    max="200"
-                    (change)="afterChange()"
-                    aria-label="units"></mat-slider>
-            </div>
-        </div>
+        <slider-described class="mt"
+        [Model]="LogicClientCluster"
+        [Title]="'Output rate'"
+        [Property]="'outputRate'"
+        [AfterChange]="afterChange"
+        [Tooltip]="'Change the speed at which data is sent.'"
+        ></slider-described>
     </div>
     <div #actions>
         <div class="options-actions">

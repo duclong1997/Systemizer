@@ -1,20 +1,14 @@
-import { Component, ComponentFactoryResolver, OnInit, ViewChild, ViewContainerRef } from '@angular/core';
-import { PlacingService } from 'src/app/placing.service';
-import { SelectionService } from 'src/app/selection.service';
+import { Component, OnInit } from '@angular/core';
 import { API } from 'src/models/API';
-import { Endpoint, EndpointAction } from 'src/models/Endpoint';
+import { Endpoint } from 'src/models/Endpoint';
 import { APIType } from 'src/models/enums/APIType';
 import { gRPCMode } from 'src/models/enums/gRPCMode';
-import { EndpointActionHTTPMethod, HTTPMethod } from 'src/models/enums/HTTPMethod';
+import { HTTPMethod } from 'src/models/enums/HTTPMethod';
 import { Protocol } from 'src/models/enums/Protocol';
 import { OperatorComponent } from '../Shared/OperatorComponent';
 
 @Component({
 	selector: 'api',
-	queries: {
-		anchorRef: new ViewChild( "anchorRef" ),
-		optionsRef: new ViewChild( "options" ),
-	},
 	templateUrl: './api.component.html',
 	styleUrls: ['./api.component.scss']
 })
@@ -22,66 +16,8 @@ export class ApiComponent  extends OperatorComponent implements OnInit{
 
 	public LogicApi: API = new API();
 	
-	@ViewChild("conn", { read: ViewContainerRef }) conn;
-
 	connectableEndpoints: Endpoint[] = [];
-	consumeableEndpoints: Endpoint[] = [];
-
-	constructor(placingService: PlacingService, selectionService: SelectionService, resolver: ComponentFactoryResolver){
-		super(placingService, selectionService, resolver);
-	}
-
-	addAction(endpoint: Endpoint){
-		endpoint.actions.push(new EndpointAction());
-		this.afterChange();
-	}
-
-	removeAction(endpoint: Endpoint, action: EndpointAction){
-		let idx = 0;
-		for(let act of endpoint.actions){
-			if(act === action) {
-				endpoint.actions.splice(idx,1);
-				this.afterChange();
-				return;
-			}
-			idx++;
-		}
-	}
-
-	addEndpoint(){
-		if(this.LogicApi.options.isConsumer)
-			this.LogicApi.options.endpoints.push(new Endpoint(null, [HTTPMethod.GET, HTTPMethod.POST, HTTPMethod.PUT, HTTPMethod.DELETE, HTTPMethod.PATCH]));
-		else
-			this.LogicApi.options.endpoints.push(new Endpoint(null, [HTTPMethod.GET]));
-		this.afterChange();
-	}
-
-	removeEndpoint(endpoint: Endpoint){
-		let idx = 0;
-		for(let ep of this.LogicApi.options.endpoints){
-			if(ep === endpoint) {
-				this.LogicApi.options.endpoints.splice(idx,1);
-				this.afterChange();
-				return;
-			}
-			idx++;
-		}	
-	}
-
-	handleActionEndpointChange(endpoint: Endpoint, action: EndpointAction){
-		action.method = endpoint.protocol != Protocol.WebSockets && action.endpoint.protocol != Protocol.WebSockets ? EndpointActionHTTPMethod.Inherit : EndpointActionHTTPMethod[HTTPMethod[action.endpoint.supportedMethods[0]]];
-	}
-
-	handleEndpointMethodChange(endpoint: Endpoint){
-		if(endpoint.supportedMethods.length == 0)
-			endpoint.supportedMethods = [HTTPMethod.GET];
-	}
-
-	handleEndpointUrlChange(endpoint){
-		if(endpoint.url == null || endpoint.url.replace(/\s/g,"") == "")
-			endpoint.url = `api/v${Math.floor(10*Math.random())}`;
-	}
-
+	
 	public handleClick(event: MouseEvent){
 		super.handleClick(event);
 		this.updateSelection();
@@ -112,23 +48,6 @@ export class ApiComponent  extends OperatorComponent implements OnInit{
 					endpoint.actions.splice(i,1);
 			}
 		}
-		if(this.LogicApi.options.isConsumer){ // Remove consumed endpoints that are no longer available
-			this.consumeableEndpoints = this.LogicApi.getConsumableEndpoints();
-			let idx_arr = [];
-			for(let i = 0; i < this.LogicApi.options.endpoints.length; i++){
-				let endpoint = this.LogicApi.options.endpoints[i];
-				let ep = this.consumeableEndpoints.find(x => x.url == endpoint.url);
-				if(ep == null) 
-					idx_arr.push(i);
-			}
-			for(let i = idx_arr.length-1; i>=0 ;i--)
-				this.LogicApi.options.endpoints.splice(idx_arr[i], 1);
-		}
-	}
-
-	public handleProtocolChange(endpoint: Endpoint){
-		if(endpoint.protocol == Protocol.WebSockets)
-			endpoint.supportedMethods = [HTTPMethod.GET];
 	}
 
 	public handleTypeChange(){
@@ -154,19 +73,9 @@ export class ApiComponent  extends OperatorComponent implements OnInit{
 		this.LogicApi.options.endpoints = [endpoint];
 	}
 
-	ngAfterViewInit(): void {
-		super.Init(this.conn);
-  	}
-
 	public getLogicComponent(){
 		return this.LogicApi;
 	}
-
-	getActionsElement(){
-		return null;
-	}
-
-	ngOnInit(){}
 
 	static getColor(): string{
 		let c = new API();

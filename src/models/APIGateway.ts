@@ -3,7 +3,6 @@ import { arrayEquals, sleep, UUID } from "src/shared/ExtensionMethods";
 import { Connection } from "./Connection";
 import { EndpointOperator, EndpointOptions } from "./EndpointOperator";
 import { Endpoint, EndpointRef } from "./Endpoint";
-import { APIType } from "./enums/APIType";
 import { gRPCMode } from "./enums/gRPCMode";
 import { EndpointActionHTTPMethod, HTTPMethod } from "./enums/HTTPMethod";
 import { Protocol } from "./enums/Protocol";
@@ -53,7 +52,7 @@ export class APIGateway extends EndpointOperator implements IDataOperator{
                     return;
                 }
                 let result = await this.inputPort.sendData(data, this.connectionTable[data.responseId]);
-                if(!result && data.header.stream){ // send end stream to out if the client doesnt exist 
+                if(!result && data.header.stream){ // send end stream to out if the client doesn't exist 
                     data.header.stream = false;
                     data.requestId = data.responseId;
                     data.responseId = null;
@@ -76,10 +75,17 @@ export class APIGateway extends EndpointOperator implements IDataOperator{
                 return;
 
             this.fireReceiveData(data);
+            this.requestReceived();
+
             let sendResponse = false;
             let isFirstStreamRequest = this.connectionTable[data.requestId] == null && data.header.stream;
             let isLastStreamRequest = this.connectionTable[data.requestId] != null && !data.header.stream;
             let dontSendRequestResponse = (isFirstStreamRequest || isLastStreamRequest);
+
+            if(!await this.throttleThroughput(5000)){
+                this.requestProcessed();
+                return;
+            }
 
             // Send data to every action 
             for(let action of targetEndpoint.actions){
@@ -104,7 +110,6 @@ export class APIGateway extends EndpointOperator implements IDataOperator{
                 }
 
                 let requestId = (isStream && !data.header.stream && !isLastStreamRequest) ? UUID() : data.requestId;
-                this.connectionTable[requestId] = data.origin;
                 let request = new RequestData();
                 let epRef = new EndpointRef();
                 epRef.endpoint = action.endpoint;
@@ -121,10 +126,18 @@ export class APIGateway extends EndpointOperator implements IDataOperator{
                 else{
                     if(!data.header.stream) 
                         sendResponse = true;
-                    await this.outputPort.sendData(request, targetConnection);
+                    if(action.asynchronous){
+                        this.outputPort.sendData(request, targetConnection);
+                    }
+                    else{
+                        await this.outputPort.sendData(request, targetConnection);
+                        if(data.sendResponse)
+                            this.connectionTable[requestId] = data.origin;
+                    }
                 }
             }
 
+            this.requestProcessed();
             if(isFirstStreamRequest)
                 this.connectionTable[data.requestId] = data.origin;
             if(targetEndpoint.grpcMode == gRPCMode["Server Streaming"]) {
@@ -135,15 +148,13 @@ export class APIGateway extends EndpointOperator implements IDataOperator{
                 if(isLastStreamRequest)
                     this.connectionTable[data.requestId] = null;
             }
-            if(sendResponse){
+            if((sendResponse || targetEndpoint.actions.length == 0 && !data.header.stream) && data.sendResponse){
                 // Send response back
                 this.connectionTable[data.requestId] = data.origin;
                 await this.sendData(this.getResponse(data));
             }
         }
     }
-
-    onConnectionUpdate(wasOutput: boolean = false){}
 
     async sendData(response: RequestData) {
         let targetConnection = this.connectionTable[response.responseId]
@@ -158,6 +169,9 @@ export class APIGateway extends EndpointOperator implements IDataOperator{
             if(res){
                 this.connectionTable[response.responseId] = null;
             }
+        }
+        else{
+            this.connectionTable[response.responseId] = null;
         }
     }
 
@@ -199,10 +213,6 @@ export class APIGateway extends EndpointOperator implements IDataOperator{
 
         await this.sendData(data);
         await this.serverStream(data, streamingEndpoint);
-    }
-
-    getAvailableEndpoints(): Endpoint[]{
-        return this.getEndpoints();
     }
 
     getEndpoints() : Endpoint[]{

@@ -8,8 +8,9 @@ import { MatSelectModule } from "@angular/material/select";
 import { MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSliderModule } from "@angular/material/slider"
+import { MatCheckboxModule } from "@angular/material/checkbox"
 
-import { BrowserModule, EVENT_MANAGER_PLUGINS } from '@angular/platform-browser';
+import { BrowserModule, EVENT_MANAGER_PLUGINS, HAMMER_LOADER } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { DelayedHoverDirective } from "../shared/DelayedHoverDirective";
 import { ResizableTextAreaDirective } from "../shared/resizable-textarea";
@@ -38,6 +39,7 @@ import { TextfieldComponent } from './board/components/textfield/textfield.compo
 import { WebserverComponent } from './board/components/webserver/webserver.component';
 import { ProxyComponent } from './board/components/proxy/proxy.component';
 import { ClientclusterComponent } from './board/components/clientcluster/clientcluster.component';
+import { CDNComponent } from './board/components/cdn/cdn.component';
 
 import { BoardUIComponent } from './board/boardUI/boardUI.component';
 import { OptionsmenuComponent } from './board/optionsmenu/optionsmenu.component';
@@ -49,7 +51,15 @@ import { GettingStartedComponent } from './pages/getting-started/getting-started
 import { PagesHeaderComponent } from './pages/header/header.component';
 import { LandingPageComponent } from './pages/landing-page/landing-page.component';
 import { PagesComponent } from './pages/pages.component';
-import { CDNComponent } from './board/components/cdn/cdn.component';
+import { EndpointSelectComponent } from './board/components/Shared/endpoint-select/endpoint-select.component';
+import { SliderDescribedComponent } from './board/components/Shared/slider-described/slider-described.component';
+import { SimulationCardComponent } from './board/components/Shared/simulation-card/simulation-card.component';  
+
+import * as Hammer from 'hammerjs';
+import {
+HammerModule, HammerGestureConfig, HAMMER_GESTURE_CONFIG} 
+from '@angular/platform-browser';
+
 
 @NgModule({
   declarations: [
@@ -85,6 +95,9 @@ import { CDNComponent } from './board/components/cdn/cdn.component';
     ProxyComponent,
     ClientclusterComponent,
     CDNComponent,
+    EndpointSelectComponent,
+    SliderDescribedComponent,
+    SimulationCardComponent
   ],
   imports: [
     BrowserModule,
@@ -99,7 +112,9 @@ import { CDNComponent } from './board/components/cdn/cdn.component';
     MatSnackBarModule,
     MatTooltipModule,
     MatSliderModule,
-    ColorPickerModule
+    MatCheckboxModule,
+    ColorPickerModule,
+    HammerModule
   ],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 	providers: [
@@ -107,7 +122,15 @@ import { CDNComponent } from './board/components/cdn/cdn.component';
 			provide: EVENT_MANAGER_PLUGINS,
 			useClass: VueEventModifiersPlugin,
 			multi: true
-		}
+		},
+    {
+      provide: HAMMER_GESTURE_CONFIG,
+      useClass: HammerGestureConfig,
+    },
+    {
+      provide: HAMMER_LOADER,
+      useValue: () => new Promise(() => {})
+    }
 	],
   bootstrap: [AppComponent]
 })

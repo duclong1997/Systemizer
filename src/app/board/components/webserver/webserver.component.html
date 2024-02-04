@@ -4,35 +4,35 @@
 [style.top.px]="LogicWebServer.options.Y"
 >
     <template #conn></template>
-    <div class="img-container" (mousedown)="handleMousedown( $event )"
+    <div class="img-container" (mousedown)="handleMousedown( $event )" (touchstart)="handleMousedown($event)"
     (click)="handleClick($event)">
         <span class="img bg-webserver"></span>
     </div>  
 </div>
 <div style="display:none">
     <div #options>
-        <div class="options-endpoints-container">
-            <div class="options-endpoints-top">
-                <span class="property-name">Endpoints: <info-tooltip [Message]="'List of endpoints the web server has available (By default set to /).'"></info-tooltip></span>
-            </div>
-            <div class="options-endpoints">
-                <div class="options-endpoint" *ngFor="let endpoint of this.LogicWebServer.options.endpoints">
-                    <mat-expansion-panel>
-                        <mat-expansion-panel-header>
-                            <mat-panel-title>
-                                <input disabled class="endpoint-url" [(ngModel)]="endpoint.url" >
-                            </mat-panel-title>
-                        </mat-expansion-panel-header>
-                        <div class="options-endpoint-menu-top">
-                            <mat-form-field class="endpoint-method" appearance="fill">
-                                <mat-select disabled [(ngModel)]="endpoint.supportedMethods" multiple>
-                                    <mat-option *ngFor="let method of HTTPMethodKeys" [value]="method">{{ HTTPMethod[method] }}</mat-option>
-                                </mat-select>
-                            </mat-form-field>
-                        </div>
-                    </mat-expansion-panel>
-                </div>
+        <div class="options-type-container">
+            <span class="property-name">Type: <info-tooltip [Message]="'Changes the type of endpoints the Web Server has. This can change the behaviour of endpoints.'"></info-tooltip></span>
+            <div>
+                <mat-form-field appearance="fill" class="action-endpoint">
+                    <mat-select (selectionChange)="handleTypeChange(); afterChange()" [(ngModel)]="LogicWebServer.options.type">
+                        <mat-option *ngFor="let type of APITypeKeys" [value]="type">{{APIType[type]}}</mat-option>
+                    </mat-select>
+                </mat-form-field>
             </div>
         </div>
+        <endpoint-select
+        [Model]="LogicWebServer"
+        [Type]="LogicWebServer.options.type"
+        [HasStreamActions]="true"
+        [ConnectableEndpoints]="connectableEndpoints"
+        [AfterChange]="afterChange"
+        ></endpoint-select>
+    </div>
+    <div #simulations>
+        <slider-described
+        [Model]="LogicWebServer"
+        [AfterChange]="afterChange"
+        ></slider-described>
     </div>
 </div>

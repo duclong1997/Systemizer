@@ -60,7 +60,15 @@ export class CreateComponent implements OnInit {
 				if(params.edit){
 					try{
 						let json = atob(params.edit);
-						this.viewerSave = this.savingService.getSaveFromOptimizedSave(JSON.parse(json));
+						let save = JSON.parse(json)
+						if(Array.isArray(save)){
+							this.viewerSave = this.savingService.getSaveFromOptimizedSave(save);
+						}
+						else{
+							this.viewingService.setDarkMode(save.darkMode, false);
+							this.viewingService.setTitlesHidden(!save.showTitles, false);
+							this.viewerSave = this.savingService.getSaveFromOptimizedSave(save.comp);
+						}
 						this.showReadOnlyViewer = false;
 						this.showEdit = true;
 					}
@@ -71,11 +79,7 @@ export class CreateComponent implements OnInit {
 				this.showOnboardIntro = params["showOnboardTutorial"] == "true";
 			}
 		);
-		if(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && !this.showReadOnlyViewer && !this.showReadOnlyViewerError){
-			this.showMobileDisclaimer = true;
-			this.showBoard = false;
-			return;
-		}
+
 		if(seenIntroTutorial != "true" || this.showOnboardIntro){
 			this.openTutorialMenu();
 			localStorage.setItem("seenIntroTutorial", "true");
@@ -188,6 +192,14 @@ export class CreateComponent implements OnInit {
 
 	closeTutorialMenu(){
 		this.isTutorialMenuOpen = false;
+	}
+
+	startSimulation(){
+		this.board.startSimulation();
+	}
+
+	stopSimulation(){
+		this.board.stopSimulation();
 	}
 
 	changeSystemName(name: string){

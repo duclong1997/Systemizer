@@ -15,7 +15,7 @@ export class API extends EndpointOperator implements IDataOperator{
     inputPort: Port;
     connectionTable: { [id:string]: Connection } = {};
     options: APIOptions;
-    color = "#4CA1AF";
+    color: string = "#4CA1AF";
 
     constructor() {
         super();
@@ -34,10 +34,10 @@ export class API extends EndpointOperator implements IDataOperator{
         if(fromOutput){
             // API received data from action 
             let targetConnection = this.connectionTable[data.responseId]
-            if(targetConnection == null) 
-                throw new Error("Target connection can not be null")
-            this.connectionTable[data.responseId] = null; // reset request id
             this.fireReceiveData(data);
+            if(targetConnection == null) 
+                return;
+            this.connectionTable[data.responseId] = null; // reset request id
         }
         else{
             // Null check
@@ -51,22 +51,35 @@ export class API extends EndpointOperator implements IDataOperator{
                 return;
 
             this.fireReceiveData(data);
+            this.requestReceived();
+
+
             if(this.connectionTable[data.requestId] != null){ // Check if the api is already streaming to this connection
                 // Client sent data to stream
-                if(data.header.stream == false) // Client wants to end stream
+                if(data.header.stream == false && targetEndpoint.grpcMode != gRPCMode.Unary || targetEndpoint.protocol == Protocol.WebSockets) {// Client wants to end stream
                     this.connectionTable[data.requestId] = null;
-
-                return;
+                    this.requestProcessed();
+                    return;
+                }
             }
             else{
                 this.connectionTable[data.requestId] = data.origin; // Save connection to request package
                 if(data.header.stream){
                     if(targetEndpoint.grpcMode != gRPCMode.Unary || targetEndpoint.protocol == Protocol.WebSockets){
                         // Client wants to start stream
+                        /*
+                        This streaming process feels kinda clunky, it will be commented for now
                         this.stream(this.getResponse(data), targetEndpoint);
+                        */
+                        this.requestProcessed();
+                        return;
                     }
-                    return;
                 }
+            }
+          
+            if(!await this.throttleThroughput(5000)){
+                this.requestProcessed();
+                return;
             }
 
             // Send data to every action
@@ -94,97 +107,24 @@ export class API extends EndpointOperator implements IDataOperator{
                 request.originID = this.originID;
                 request.requestId = UUID();
 
-                this.connectionTable[request.requestId] = request.origin;
-
-                await this.outputPort.sendData(request, targetConnection);
+                if(action.asynchronous){
+                    this.outputPort.sendData(request, targetConnection);
+                }
+                else{
+                    await this.outputPort.sendData(request, targetConnection);
+                    this.connectionTable[request.requestId] = request.origin;
+                }
             }
 
             // Send response back to client
-            if(!this.options.isConsumer){
+            this.requestProcessed();
+            if(data.sendResponse)
                 await this.sendData(this.getResponse(data));
-            }
         }
-    }
-
-    initiateConsumer(consumerConnection: Connection, subscriber = false){
-        // Remove every connetcion that is not publisher/consumer
-        let bad_connection_indexes = []
-        for(let i = this.inputPort.connections.length-1; i >= 0; i--){
-            let connection = this.inputPort.connections[i];
-            if(!this.isConsumableOperator(connection.getOtherPort(this.inputPort).parent)) 
-                bad_connection_indexes.push(i);
-        }
-
-        for(let i of bad_connection_indexes)
-            this.inputPort.connections.splice(i, 1);
-
-        let endpoints = (consumerConnection.getOtherPort(this.inputPort).parent.options as EndpointOptions).endpoints;
-        if(this.options.endpoints.filter(ep => ep.url === endpoints[0].url).length == 0){
-            if(subscriber){
-                if(endpoints.length != 0){
-                    if(this.options.isConsumer){
-                        this.options.endpoints.push(new Endpoint(endpoints[0].url, [HTTPMethod.GET, HTTPMethod.POST, HTTPMethod.PUT, HTTPMethod.PATCH, HTTPMethod.DELETE]));
-                    }
-                    else
-                        this.options.endpoints = [ new Endpoint(endpoints[0].url, [HTTPMethod.GET, HTTPMethod.POST, HTTPMethod.PUT, HTTPMethod.PATCH, HTTPMethod.DELETE])];
-                }
-                else if(endpoints.length == 0 && !this.options.isConsumer)
-                    this.options.endpoints = [];
-            }
-            else{
-                if(this.options.isConsumer)
-                    this.options.endpoints.push(endpoints[0]);
-                else
-                    this.options.endpoints = [endpoints[0]];
-            }
-        }
-        
-        this.options.isConsumer = true;
-        if(subscriber) this.options.isSubscriber = true;
-    }
-
-    onConnectionUpdate(wasOutput: boolean = false){
-        // Remove consumer connection if the API is no longer a consumer
-        if(wasOutput)
-            return;
-        if(this.options.isConsumer && !this.isConsumer()){
-            let conns = this.inputPort.connections.filter(c => this.isConsumableOperator(c.getOtherPort(this.inputPort).parent))
-            for(let connection of conns)
-                this.inputPort.removeConnection(connection,true,false);
-            this.options.isConsumer = false;
-            this.options.isSubscriber = false;
-            let ep = new Endpoint("api/posts", [HTTPMethod.GET,HTTPMethod.POST,HTTPMethod.PUT,HTTPMethod.DELETE,])
-            ep.protocol = Protocol.HTTP;
-            this.options.endpoints = [
-                ep
-            ]
-        }
-        if(this.options.isSubscriber && !this.isSubscriber())
-            this.options.isSubscriber = false;
-    }
-
-    isConsumer(): boolean{
-        if(this.inputPort.connections.length == 0)
-            return false;
-        for(let conn of this.inputPort.connections){
-            if(!this.isConsumableOperator(conn.getOtherPort(this.inputPort).parent))
-                return false;
-        }
-        return true;
-    }
-
-    isSubscriber(): boolean{
-        if(this.inputPort.connections.length == 0)
-            return false;
-        for(let conn of this.inputPort.connections){
-            if((conn.getOtherPort(this.inputPort).parent as any).isSubscribable)
-                return true;
-        }
-        return false;
     }
 
     async sendData(response: RequestData) {
-        let targetConnection = this.connectionTable[response.responseId]
+        let targetConnection = this.connectionTable[response.responseId] || response.origin;
         if(targetConnection == null)
             throw new Error("target connection is null");
         if(response.header.stream != true) // reset request id
@@ -204,47 +144,8 @@ export class API extends EndpointOperator implements IDataOperator{
         await this.sendData(data);
         await this.stream(data, streamingEndpoint);
     }
-
-    connectTo(operator: IDataOperator, connectingWithOutput:boolean, connectingToOutput:boolean): Connection{
-        let otherPort = operator.getPort(connectingToOutput);
-        if(!this.canConnectTo(otherPort, connectingWithOutput)) 
-            return null;
-        if(!operator.canConnectTo(this.getPort(connectingWithOutput), connectingToOutput)) 
-            return null;
-        if(connectingWithOutput)
-            return this.outputPort.connectTo(otherPort);
-        let conn = this.inputPort.connectTo(otherPort);
-        if(conn != null && this.isConsumableOperator(operator))
-            this.initiateConsumer(conn, (operator as any).subscribeable);
-        return conn;
-    }
-
-    getConsumableEndpoints(): Endpoint[]{
-        let endpoints = [];
-        for(let connection of this.inputPort.connections){
-            let operator = connection.getOtherPort(this.inputPort).parent;
-            if(this.isConsumableOperator(operator)){
-                for(let endpoint of (operator.options as EndpointOptions).endpoints){
-                    if(endpoints.find(ep => ep.url == endpoint.url) == null){
-                        endpoints.push(endpoint);
-                    }
-                }
-            }
-        }
-        return endpoints;
-    }
-
-    private isConsumableOperator(operator: IDataOperator): boolean{
-        return (operator as any).isSubscribable || (operator as any).isConsumable;
-    }
-
-    getAvailableEndpoints(): Endpoint[]{
-        return this.options.endpoints;
-    }
 }
 
 export class APIOptions extends EndpointOptions{
     type: APIType = APIType.REST;
-    isConsumer = false;
-    isSubscriber = false;
 }

@@ -1,22 +1,15 @@
-import { Component, ComponentFactoryResolver, OnInit, ViewChild, ViewContainerRef } from '@angular/core';
-import { PlacingService } from 'src/app/placing.service';
-import { SelectionService } from 'src/app/selection.service';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { Client } from 'src/models/Client';
 import { Endpoint } from 'src/models/Endpoint';
 import { gRPCMode } from 'src/models/enums/gRPCMode';
 import { HTTPMethod } from 'src/models/enums/HTTPMethod';
 import { Protocol } from 'src/models/enums/Protocol';
 import { RequestData, RequestDataHeader } from 'src/models/RequestData';
-import { arrayEquals, sleep, UUID } from 'src/shared/ExtensionMethods';
+import { arrayEquals, getRateFromOutputRate, sleep, UUID } from 'src/shared/ExtensionMethods';
 import { OperatorComponent } from '../Shared/OperatorComponent';
 
 @Component({
 	selector: 'client',
-	queries: {
-		anchorRef: new ViewChild( "anchorRef" ),
-		optionsRef: new ViewChild( "options" ),
-		actionsRef: new ViewChild("actions")
-	},
 	templateUrl: './client.component.html',
 	styleUrls: ['./client.component.scss']
 })
@@ -30,24 +23,17 @@ export class ClientComponent  extends OperatorComponent implements OnInit{
 	canAutoSend: boolean = true;
 
 	canSend: boolean = false;
-	canEstabilishConnection: boolean = false;
+	canEstablishConnection: boolean = false;
 	canEndConnection: boolean = false;
 
 	@ViewChild("endpointSelect") endpointSelect;
 	@ViewChild("methodSelect") methodSelect;
-	@ViewChild("conn", { read: ViewContainerRef }) conn;
 
 	isAutomaticSending = false;
 
-	constructor(placingService: PlacingService, selectionService: SelectionService ,resolver: ComponentFactoryResolver){
-		super(placingService, selectionService, resolver);
-	}
-
 	ngAfterViewInit(): void {
-		super.Init(this.conn);
+		this.Init(true);
   	}
-
-	ngOnInit(){}
 
 	handleEndpointChange(){
 		this.LogicClient.options.endpointRef.method = this.LogicClient.options.endpointRef.endpoint.supportedMethods[0];
@@ -66,7 +52,7 @@ export class ClientComponent  extends OperatorComponent implements OnInit{
 		if(this.availableEndpoints.length == 0){
 			this.availableMethods = [];
 			this.updateCanSendData();
-			this.updateCanEstabilishStream();
+			this.updateCanEstablishStream();
 			this.updateCanEndStream();
 			return;
 		}
@@ -94,8 +80,10 @@ export class ClientComponent  extends OperatorComponent implements OnInit{
 		}
 		this.protocol = this.LogicClient.options.endpointRef.endpoint.protocol;
 		this.updateCanSendData();
-		this.updateCanEstabilishStream();
+		this.updateCanEstablishStream();
 		this.updateCanEndStream();
+		if(this.isReadOnly)
+			this.cdRef.detectChanges();
 	}
 
 	public handleClick(event: MouseEvent){
@@ -115,6 +103,8 @@ export class ClientComponent  extends OperatorComponent implements OnInit{
 				this.canAutoSend = await this.stream();
 			}
 		}
+		if(this.isReadOnly)
+			this.cdRef.detectChanges();
 	}
 
 	updateCanSendData(){
@@ -125,13 +115,17 @@ export class ClientComponent  extends OperatorComponent implements OnInit{
 		this.canSend = this.LogicClient.options.endpointRef.endpoint.grpcMode != gRPCMode['Server Streaming'] && 
 			this.LogicClient.isConnectedToEndpoint || 
 			this.LogicClient.options.endpointRef.endpoint.grpcMode == gRPCMode.Unary && this.LogicClient.options.endpointRef.endpoint.protocol != Protocol.WebSockets;
+		if(this.isReadOnly)
+			this.cdRef.detectChanges();
 	}
 
-	updateCanEstabilishStream(){
-		this.canEstabilishConnection = this.LogicClient.options.endpointRef.endpoint != null && 
+	updateCanEstablishStream(){
+		this.canEstablishConnection = this.LogicClient.options.endpointRef.endpoint != null && 
 		(this.LogicClient.options.endpointRef.endpoint.grpcMode != gRPCMode.Unary || 
 		this.LogicClient.options.endpointRef.endpoint.protocol == Protocol.WebSockets) && 
 		!this.LogicClient.isConnectedToEndpoint
+		if(this.isReadOnly)
+			this.cdRef.detectChanges();
 	}
 
 	updateCanEndStream(){
@@ -139,14 +133,18 @@ export class ClientComponent  extends OperatorComponent implements OnInit{
 		(this.LogicClient.options.endpointRef.endpoint.grpcMode != gRPCMode.Unary || 
 		this.LogicClient.options.endpointRef.endpoint.protocol == Protocol.WebSockets) && 
 		this.LogicClient.isConnectedToEndpoint
+		if(this.isReadOnly)
+			this.cdRef.detectChanges();
 	}
 
 	async stream(){
-		await sleep(700);
-		this.updateCanSendData()
+		await sleep( (1 / getRateFromOutputRate(this.LogicClient.options.outputRate)) * 1000);
+		this.updateCanSendData();
 		if(!this.isAutomaticSending || !this.canSend) 
 			return true;
-		await this.sendData();
+		this.sendData();
+		if(this.isReadOnly)
+			this.cdRef.detectChanges();
 		return await this.stream();
 	}
 
@@ -163,14 +161,18 @@ export class ClientComponent  extends OperatorComponent implements OnInit{
 		else
 			request.requestId = UUID();
 		let res = this.LogicClient.sendData(request);
+		if(this.isReadOnly)
+			this.cdRef.detectChanges();
 		this.updateSelection();
 		if(! (await res)){
 			this.isAutomaticSending = false;
 			this.canAutoSend = true;
+			if(this.isReadOnly)
+				this.cdRef.detectChanges();
 		}
 	}
 
-	estabilishConnection(){
+	establishConnection(){
 		if(this.LogicClient.isConnectedToEndpoint) 
 			return;
 		this.LogicClient.isConnectedToEndpoint = true;
@@ -185,6 +187,8 @@ export class ClientComponent  extends OperatorComponent implements OnInit{
 		this.LogicClient.sendData(request);
 
 		this.updateSelection();
+		if(this.isReadOnly)
+			this.cdRef.detectChanges();
 	}
 
 	async endConnection(){
@@ -206,6 +210,8 @@ export class ClientComponent  extends OperatorComponent implements OnInit{
 		this.LogicClient.isConnectedToEndpoint = false;
 
 		this.updateSelection();
+		if(this.isReadOnly)
+			this.cdRef.detectChanges();
 	}
 
 	static getColor(): string{

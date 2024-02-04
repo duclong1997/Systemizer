@@ -1,12 +1,14 @@
-import { AfterViewChecked, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, Output, Renderer2, ViewChild, ViewContainerRef } from '@angular/core';
+import { AfterViewChecked, ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, Output, Renderer2, ViewChild, ViewContainerRef } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { IDataOperator } from 'src/interfaces/IDataOperator';
+import { EndpointOperator } from 'src/models/EndpointOperator';
 import { clone, sleep, UUID } from 'src/shared/ExtensionMethods';
 import { ChangesService } from '../changes.service';
 import { ExportPngOptions, ExportService, ExportSvgOptions } from '../export.service';
 import { PlacingService } from '../placing.service';
 import { SavingService } from '../saving.service';
 import { SelectionService } from '../selection.service';
+import { SimulationService } from '../simulation.service';
 import { ViewingService } from '../viewing.service';
 import { ApiComponent } from './components/api/api.component';
 import { ApiGatewayComponent } from './components/apigateway/apigateway.component';
@@ -39,7 +41,8 @@ class SavedBoard{
 @Component({
 	selector: 'app-board',
 	templateUrl: './board.component.html',
-	styleUrls: ['./board.component.scss']
+	styleUrls: ['./board.component.scss'],
+	changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class BoardComponent implements AfterViewChecked  {
 
@@ -53,6 +56,7 @@ export class BoardComponent implements AfterViewChecked  {
 	currentBoardId: string = UUID();
 	isAllClientsSendingData = false;
 	canToggleClientsSendingData = true;
+	lastTouch: Touch;
 
 	@Input() isReadOnly = false;
 	@Input() loadedSave: any;
@@ -110,6 +114,7 @@ export class BoardComponent implements AfterViewChecked  {
 	private changesService: ChangesService,
 	private exportService: ExportService,
 	private viewingService: ViewingService,
+	public simulationService: SimulationService,
 	private renderer: Renderer2) { }
 	
 	scroll(event){
@@ -119,7 +124,7 @@ export class BoardComponent implements AfterViewChecked  {
 		else
 			this.zoomOut();
 	}
-
+	
 	ngOnInit(): void {
 		this.board = document.getElementById("board");
 		this.board.style.width = `${this.placingService.boardWidth}px`;
@@ -128,8 +133,8 @@ export class BoardComponent implements AfterViewChecked  {
 
 		this.updateBoardTransform();
 
-		window.addEventListener("resize", event => {
-			event.preventDefault();
+		this.board.addEventListener("resize", e => {
+			e.preventDefault();
 		});
 
 		if(!this.isReadOnly){ // These events will not be used in readonly board
@@ -153,7 +158,23 @@ export class BoardComponent implements AfterViewChecked  {
 					this.placingService.stopCreating();
 					this.componentChanged();
 				}
-			})
+			});
+			window.addEventListener("touchstart",(e) => {this.lastTouch = e.touches[0];});
+			window.addEventListener("touchmove", (e) => {this.lastTouch = e.touches[0];});
+		
+			window.addEventListener("touchend",(e: any)=>{
+				if(this.placingService.isCreating){
+					let posX = (this.posX - this.placingService.boardWidth * (this.placingService.boardScale - 1) / 2);
+					let posY = (this.posY - this.placingService.boardHeight * (this.placingService.boardScale - 1) / 2);
+					var x = Math.max(Math.min((this.lastTouch.pageX - posX) / this.placingService.boardScale - 20, this.placingService.boardWidth), 0);
+					var y =  Math.max(Math.min((this.lastTouch.pageY - posY) / this.placingService.boardScale - 80 / this.placingService.boardScale, this.placingService.boardWidth), 0);
+					let component = this.placingService.createComponent(this.placingService.creatingItem, x, y, this.placingService.creatingItemOptions);
+					this.pushComponent(component);
+					this.placingService.stopCreating();
+					this.componentChanged();
+				}
+				return true;
+			});
 			this.placingService.componentChanged.subscribe(()=>{
 				// Some component just got changed, change will be added for undo
 				this.componentChanged();
@@ -162,7 +183,7 @@ export class BoardComponent implements AfterViewChecked  {
 				// A component was created somewhere else and needs to be added to the state of the board
 				this.pushComponent(component);
 			})
-			this.placingService.showComponentConextMenu.subscribe((e)=>{
+			this.placingService.showComponentContextMenu.subscribe((e)=>{
 				// Display a context menu on component
 				this.showComponentContextMenu = true;
 				this.showContextMenu = false;
@@ -228,7 +249,7 @@ export class BoardComponent implements AfterViewChecked  {
 		}
 	}
 
-	ngAfterViewChecked(): void { this.changeRef.detectChanges(); }
+	ngAfterViewChecked(): void { this.changeRef.detectChanges();}
 	
 	async ngAfterViewInit(){
 		this.placingService.connectionRef = this.conn;
@@ -322,6 +343,7 @@ export class BoardComponent implements AfterViewChecked  {
 	}
 
 	loadSelectedSavedBoard(){
+		this.changesService.reset();
 		if(this.allLogicComponents.length != 0)
 			this.saveCurrentBoardToAllBoards();
 		this.closeSavedBoards();
@@ -352,52 +374,87 @@ export class BoardComponent implements AfterViewChecked  {
 		}, 1000);
 	}
 
-	public handleMousedown(event: Event) {
-		let e = event as MouseEvent;
-		if(e.button == 0 && !this.isReadOnly){
-			// Start selecting
-			this.showContextMenu = false;
-			this.showComponentContextMenu = false;
-			this.selectionService.startSelecting(e, this.placingService.boardScale)
+	public handleMousedown(e: Event) {
+		if(e instanceof MouseEvent){
+			if(e.button == 0 && !this.isReadOnly){
+				// Start selecting
+				this.showContextMenu = false;
+				this.showComponentContextMenu = false;
+				this.selectionService.startSelecting(e, this.placingService.boardScale)
+			}
+			else if(this.isReadOnly || e.button == 1 || e.button == 2){
+				e.preventDefault();
+				if(!this.placingService.canDrag()) 
+					return;
+				this.board.classList.add("moving")
+				this.board.addEventListener( "mousemove", this.handleMousemove );
+				window.addEventListener( "mouseup", this.handleMouseup );
+			}
 		}
-		else if(this.isReadOnly || e.button == 1 || e.button == 2){
+		else if(e instanceof TouchEvent){
 			e.preventDefault();
 			if(!this.placingService.canDrag()) 
 				return;
+			this.lastTouchMoveX = e.touches[0].clientX;
+			this.lastTouchMoveY = e.touches[0].clientY;
 			this.board.classList.add("moving")
-			this.board.addEventListener( "mousemove", this.handleMousemove );
-			window.addEventListener( "mouseup", this.handleMouseup );
+			this.board.addEventListener( "touchmove", this.handleMousemove );
+			window.addEventListener( "touchend", this.handleMouseup );
 		}
+		
 	}
 
-	public handleMousemove = ( event: MouseEvent ): void => {
-		this.boardMoved = true;
-		this.showContextMenu = false;
-		this.showComponentContextMenu = false;
-		this.posX += event.movementX;
-		this.posY += event.movementY;
+	lastTouchMoveX: number = 0;
+	lastTouchMoveY: number = 0;
+
+	public handleMousemove = ( e: Event ): void => {
+		if(e instanceof MouseEvent){
+			this.boardMoved = true;
+			this.showContextMenu = false;
+			this.showComponentContextMenu = false;
+			this.posX += e.movementX;
+			this.posY += e.movementY;
+		}
+		else if(e instanceof TouchEvent){
+			this.boardMoved = true;
+			this.showContextMenu = false;
+			this.showComponentContextMenu = false;
+			this.posX += e.touches[0].clientX - this.lastTouchMoveX;
+			this.posY += e.touches[0].clientY - this.lastTouchMoveY;
+			this.lastTouchMoveX = e.touches[0].clientX;
+			this.lastTouchMoveY = e.touches[0].clientY;
+		}
 
 		this.updateBoardTransform();
 	}
 
-	public handleMouseup = (e) : void => {
-		if(e.button === 2 && !this.boardMoved && !this.isReadOnly){
-			this.showContextMenu = true;
-			this.showComponentContextMenu = false;
-			this.contextMenuX = e.offsetX;
-			this.contextMenuY = e.offsetY;
+	public handleMouseup = (e: Event) : void => {
+		if(e instanceof MouseEvent){
+			if(e.button === 2 && !this.boardMoved && !this.isReadOnly){
+				this.showContextMenu = true;
+				this.showComponentContextMenu = false;
+				this.contextMenuX = e.offsetX;
+				this.contextMenuY = e.offsetY;
+			}
+			this.boardMoved = false;
+			this.board.classList.remove("moving")
+			this.board.removeEventListener( "mousemove", this.handleMousemove );
+			window.removeEventListener( "mouseup", this.handleMouseup );
 		}
-		this.boardMoved = false;
-		this.board.classList.remove("moving")
-		this.board.removeEventListener( "mousemove", this.handleMousemove );
-		window.removeEventListener( "mouseup", this.handleMouseup );
+		else if(e instanceof TouchEvent){
+			this.boardMoved = false;
+			this.board.classList.remove("moving")
+			this.board.removeEventListener( "touchmove", this.handleMousemove );
+			window.removeEventListener( "touchend", this.handleMouseup );
+		}
+	
 	}
 
 	public updateBoardTransform(){
 		this.board.style.transform = `translateX(${this.posX}px) translateY(${this.posY}px) scale(${this.placingService.boardScale})`;
 	}
 
-	public handleClick = (event: MouseEvent) : void => {
+	public handleClick = () : void => {
 		if(this.placingService.isConnecting){
 			this.placingService.stopConnecting();
 			this.board.onmousemove = null;
@@ -405,20 +462,20 @@ export class BoardComponent implements AfterViewChecked  {
 		}
 	}
 
-	public handleSelfClick(event: Event){
+	public handleSelfClick(){
 		this.selectionService.clearSelection();
 		this.selectionService.clearConnectionSelection();
 		this.selectionService.clearCurrentConnectionSelections();
 		this.selectionService.clearLineBreakSelection();
 	}
 
-	zoomOut(){
-		this.placingService.boardScale = Math.max(this.placingService.boardScale - 0.1,0.1) ;
+	zoomOut(modifier: number = 1){
+		this.placingService.boardScale = Math.max(this.placingService.boardScale - (0.1 / modifier),0.1) ;
 		this.updateBoardTransform();
 	}
 
-	zoomIn(){
-		this.placingService.boardScale = Math.min(this.placingService.boardScale + 0.1,2);
+	zoomIn(modifier: number = 1){
+		this.placingService.boardScale = Math.min(this.placingService.boardScale + (0.1 / modifier),2);
 		this.updateBoardTransform();
 	}
 
@@ -480,8 +537,8 @@ export class BoardComponent implements AfterViewChecked  {
 		this.isAllClientsSendingData = true;
 		for(let component of this.allComponents){
 			if(component instanceof ClientComponent){
-				if(component.canEstabilishConnection){
-					component.estabilishConnection();
+				if(component.canEstablishConnection){
+					component.establishConnection();
 				}
 				component.toggleAutomaticSend();
 				await sleep(300); // Make some delay between
@@ -517,6 +574,34 @@ export class BoardComponent implements AfterViewChecked  {
 		setTimeout(()=>{
 			this.canToggleClientsSendingData = true;
 		}, 400);
+	}
+
+	/**
+	 * Starts flow simulation
+	 */
+	startSimulation(){
+		this.simulationService.startFlowSimulation();
+		for(let component of this.allComponents){
+			let logicComponent = component.getLogicComponent()
+			if(logicComponent instanceof EndpointOperator){
+				logicComponent.isFlowSimulationOn = true;
+				component.cdRef.detectChanges();
+			}
+		}
+	}
+
+	/**
+	 * Stops flow simulation
+	 */
+	stopSimulation(){
+		this.simulationService.stopFlowSimulation();
+		for(let component of this.allComponents){
+			let logicComponent = component.getLogicComponent()
+			if(logicComponent instanceof EndpointOperator){
+				logicComponent.isFlowSimulationOn = false;
+				component.cdRef.detectChanges();
+			}
+		}
 	}
 
 	componentChanged(){
@@ -711,6 +796,7 @@ export class BoardComponent implements AfterViewChecked  {
 			localStorage.setItem(this.savingService.LOCALSTORAGE_AUTOSAVE_KEY,"");
 		this.allComponents = [];
 		this.allLogicComponents = [];
+		this.simulationService.stopFlowSimulation();
 	}
 
 	getComponentTypeFromName(name: string){

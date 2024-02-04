@@ -1,4 +1,4 @@
-import { IDataOperator } from "src/interfaces/IDataOperator";
+import { IDataOperator, ReceiveDataEvent } from "src/interfaces/IDataOperator";
 import { sleep } from "src/shared/ExtensionMethods";
 import { Connection } from "./Connection";
 import { RequestData } from "./RequestData";
@@ -123,8 +123,8 @@ export class Port{
      * isConnectedTo: returns true if connected to given port via Connection
      */
     public isConnectedTo(port: Port) : boolean {
-        for(let connecion of this.connections){
-            if(connecion.getOtherPort(this) === port) 
+        for(let connection of this.connections){
+            if(connection.getOtherPort(this) === port) 
                 return true;
         }
         return false;
@@ -136,5 +136,13 @@ export class Port{
     }
     private fireRemoveConnection(event: RemoveConnectionEvent) { 
         this.removeConnectionDispatcher.fire(event);
+    }
+
+    protected dropRequestDispatcher = new EventDispatcher<ReceiveDataEvent>();
+    public onDropRequest(handler: Handler<ReceiveDataEvent>) {
+        this.dropRequestDispatcher.register(handler);
+    }
+    public fireDropRequest(event: ReceiveDataEvent) { 
+        this.dropRequestDispatcher.fire(event);
     }
 }

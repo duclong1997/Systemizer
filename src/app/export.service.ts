@@ -6,7 +6,7 @@ import { Technology } from 'src/models/enums/Technology';
 import { MessageQueue } from 'src/models/MessageQueue';
 import { Port } from 'src/models/Port';
 import { TextField } from 'src/models/TextField';
-import { createRoundedCanvasPath, createRoundedPath, UUID } from 'src/shared/ExtensionMethods';
+import { createRoundedPath, UUID } from 'src/shared/ExtensionMethods';
 import { PlacingService } from './placing.service';
 import { SavingService } from './saving.service';
 
@@ -279,7 +279,6 @@ export class ExportService {
 	async getSvg(components: IDataOperator[], options: ExportSvgOptions){
 		if(components.length == 0)
 			return null;
-		
 		let svg = document.createElementNS(this.svgns, "svg") as SVGElement;
 		document.getElementsByTagName("body")[0].appendChild(svg);
 		let offsetX = 0;

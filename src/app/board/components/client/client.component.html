@@ -5,7 +5,7 @@
 [style.top.px]="LogicClient.options.Y"
 >
     <template #conn></template>
-    <div class="img-container" (mousedown)="handleMousedown( $event )"
+    <div class="img-container" (mousedown)="handleMousedown( $event )" (touchstart)="handleMousedown($event)"
     (click)="handleClick($event)">
         <img src="./assets/client.svg">
     </div>    
@@ -16,8 +16,8 @@
     <button class="icon" (click)="sendData()" *ngIf="canSend">
         <img src="./assets/send.svg">
     </button>
-    <button *ngIf="canEstabilishConnection"(click)="estabilishConnection()">
-        Estabilish<br>Connection
+    <button *ngIf="canEstablishConnection"(click)="establishConnection()">
+        Establish<br>Connection
     </button>
     <button class="bottom" *ngIf="canEndConnection"(click)="endConnection()">
         End<br>Connection
@@ -43,7 +43,7 @@
                         </mat-select>
                     </ng-template>
                 </mat-form-field>
-                <mat-form-field [style.display]="isMQEndpoint(LogicClient.options.endpointRef.endpoint) ? 'none' : 'flex'" appearance="fill" class="endpoint-method">
+                <mat-form-field style="display: flex;" appearance="fill" class="endpoint-method">
                     <mat-select (selectionChange)="afterChange()" [(ngModel)]="LogicClient.options.endpointRef.method" #methodSelect>
                       <mat-option *ngFor="let method of availableMethods" [value]="method">{{ formatMethod(HTTPMethod[method+''], protocol == Protocol.Database) }}</mat-option>
                     </mat-select>
@@ -55,12 +55,19 @@
                 </mat-form-field>
             </div>
         </div>
+        <slider-described class="mt"
+        [Model]="LogicClient"
+        [Title]="'Output rate'"
+        [Property]="'outputRate'"
+        [AfterChange]="afterChange"
+        [Tooltip]="'Change the speed at which data is sent.'"
+        ></slider-described>
     </div>
     <div #actions>
         <div class="options-actions">
             <div class="actions-container">
-                <button *ngIf="canEstabilishConnection"
-                 (click)="estabilishConnection()">Estabilish Connection</button>
+                <button *ngIf="canEstablishConnection"
+                 (click)="establishConnection()">Establish Connection</button>
                 <button *ngIf="canEndConnection"
                  (click)="endConnection()">End Connection</button>
                 <div>

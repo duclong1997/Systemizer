@@ -29,13 +29,16 @@ export class CDN extends EndpointOperator implements IDataOperator{
         if(targetEndpoint == null)
             return;
 
-        this.connectionTable[data.requestId] = data.origin;
         this.fireReceiveData(data);
+        this.requestReceived();
 
-        await this.sendData(this.getResponse(data));
+        this.connectionTable[data.requestId] = data.origin;
+
+        // Send response back
+        this.requestProcessed();
+        if(data.sendResponse)
+            await this.sendData(this.getResponse(data));
     }
-
-    onConnectionUpdate(wasOutput: boolean = false){}
 
     async sendData(response: RequestData) {
         let targetConnection = this.connectionTable[response.responseId]
@@ -43,10 +46,6 @@ export class CDN extends EndpointOperator implements IDataOperator{
             throw new Error("Target connection can not be null");
         this.connectionTable[response.responseId] = null; // reset request id
         await this.inputPort.sendData(response, targetConnection);
-    }
-
-    getAvailableEndpoints(): Endpoint[]{
-        return this.options.endpoints;
     }
 }
 

@@ -78,7 +78,7 @@ export class ComponentmenuComponent implements OnInit {
 			new MenuItem(ClientclusterComponent, "Client Cluster", "","./assets/clientcluster.svg", '<p>Client cluster represents multiple clients. It sends data to any endpoint available at given speed.<p>To start sending data, click the <span class="highlight">Start sending data</span> button.</p>')
 		]));
 		this.allCategories.push(new Category("Server-side",[
-			new MenuItem(WebserverComponent, "Static HTTP Web Server", "HTTP","./assets/webserver.svg", '<p>Web server component simulates static HTTP web server with one default endpoint.</p><p>Use the input port to receive data and send response back.</p>'),
+			new MenuItem(WebserverComponent, "HTTP Web Server", "HTTP","./assets/webserver.svg", '<p>Web server component simulates an HTTP web server that can accept requests and send them to an API.</p><p>Use the input port to connect a client and the output port to connect other services and APIs.</p>'),
 			new MenuItem(ApiGatewayComponent, "Web API Gateway", "GW","./assets/apigateway.svg", '<p>API gateway is used to reduce number of requests, the client needs to send.</p><p>Use the input port to connect a client and the output port to connect other services and APIs.</p><p>There are 5 types of endpoints available, every type has some unique properties. Each endpoint can have actions that will be triggered on each request. For more info about each endpoint type, use the <span class="highlight">?</span> icon.</p>'),
 			new MenuItem(ApiComponent, "Web API Service", "API","./assets/api.svg", '<p>API is general component to simulate any API or microservice.</p> <p>Use the input port to connect a client and the output port to connect other services and APIs. </p> <p>API can be of 5 available types, each used for different purposes. You can add any number of endpoints that can have different actions like sending new requests to other APIs or storing data to database.</p>'),
 		]));
@@ -98,8 +98,8 @@ export class ComponentmenuComponent implements OnInit {
 			new MenuItem(ProxyComponent, "Proxy", "PROXY","./assets/proxy.svg", '<p>Proxy component acts like a man in the middle between client and server. </p> <p>Use the input port to receive data and route it to server through output port.</p>')
 		]));
 		this.allCategories.push(new Category("Async Communication",[
-			new MenuItem(MessagequeueComponent, "Message Queue", "MQ","./assets/messagequeue.svg", '<p>Message Queue component is used to simulate a single message queue, <span class="underline">not a full fledged message broker</span>.</p> <p>To publish message to queue, use the input port and send data to default endpoint. Consumers can be connected to output port of message queue. These <span class="underline">consumers can only be API Service</span> components and they automatically become consumers of message queue.</p> <p>Message can be only send to one consumer. In case of more consumers, the messages will be sent in round robin manner. Consumers can perform actions on data receive. </p> '),
-			new MenuItem(PubsubComponent, "Publisher/Subscriber Model", "PUBSUB","./assets/pubsub.svg", '<p>Pub/Sub is used for publishers sending data to a specified topic, to which can be connected any number of subscribers.</p> <p>To publish a message, connect to input port and select a topic as an endpoint. You can create any number of topics. Subcribers connect to output port and select any number of topics they want to subscribe. <span class="underline">Subcribers can only be API Service</span> components.</p>'),
+			new MenuItem(MessagequeueComponent, "Message Queue", "MQ","./assets/messagequeue.svg", '<p>Message Queue component is used to simulate a single message queue, <span class="underline">not a full fledged message broker</span>.</p> <p>To publish message to queue, use the input port and send data to an endpoint. Consumers can be connected to output port of message queue. These <span class="underline">consumers need to have an endpoint with the same URL</span>.</p> <p>Message can be only send to one consumer. In case of more consumers, the messages will be sent in round robin manner. Consumers can perform actions on data receive. </p> '),
+			new MenuItem(PubsubComponent, "Publisher/Subscriber Model", "PUBSUB","./assets/pubsub.svg", '<p>Pub/Sub is used for publishers sending data to a specified topic, to which can be connected any number of subscribers.</p> <p>To publish a message, connect to input port and select a topic as an endpoint. You can create any number of topics. Subcribers connect to output port and select any number of topics they want to subscribe. <span class="underline">Subcribers must have an endpoint with the same url as the topic they subscribe</span>.</p>'),
 		]));
 		this.allCategories.push(new Category("Other",[
 			new MenuItem(TextfieldComponent, "Text Field", "TEXT","./assets/text.svg", '<p>General text field with customizable font size and style.</p>'),
@@ -141,6 +141,9 @@ export class ComponentmenuComponent implements OnInit {
 
 		window.addEventListener("mousemove", this.mouseMove);
 		window.addEventListener("mouseup", this.mouseUp);
+
+		window.addEventListener("touchmove", this.mouseMove);
+		window.addEventListener("touchend", this.mouseUp);
 		return false;
 	}
 
@@ -148,15 +151,28 @@ export class ComponentmenuComponent implements OnInit {
 		this.placingItem = null;
 		window.removeEventListener("mouseup",this.mouseUp);
 		window.removeEventListener("mousemove",this.mouseMove);
+
+		window.removeEventListener("touchend",this.mouseUp);
+		window.removeEventListener("touchmove",this.mouseMove);
+		
 		this.placingService.creatingItem = null;
 		this.placingService.stopCreating();
+		return true;
 	}
 
-	mouseMove = (e) =>{
-		this.placingItemRef.nativeElement.style.width = `${40*Math.max(1,this.placingService.boardScale)}px`;
-		this.placingItemRef.nativeElement.style.height = `${40*Math.max(1,this.placingService.boardScale)}px`;
-		this.placingItemRef.nativeElement.style.left = `${e.clientX-(20*Math.max(1,this.placingService.boardScale))}px`;
-		this.placingItemRef.nativeElement.style.top = `${e.clientY-(20*Math.max(1,this.placingService.boardScale))}px`;
+	mouseMove = (e: Event) =>{
+		if(e instanceof MouseEvent){
+			this.placingItemRef.nativeElement.style.width = `${40*Math.max(1,this.placingService.boardScale)}px`;
+			this.placingItemRef.nativeElement.style.height = `${40*Math.max(1,this.placingService.boardScale)}px`;
+			this.placingItemRef.nativeElement.style.left = `${e.clientX-(20*Math.max(1,this.placingService.boardScale))}px`;
+			this.placingItemRef.nativeElement.style.top = `${e.clientY-(20*Math.max(1,this.placingService.boardScale))}px`;
+		}
+		else if(e instanceof TouchEvent){
+			this.placingItemRef.nativeElement.style.width = `${40*Math.max(1,this.placingService.boardScale)}px`;
+			this.placingItemRef.nativeElement.style.height = `${40*Math.max(1,this.placingService.boardScale)}px`;
+			this.placingItemRef.nativeElement.style.left = `${e.touches[0].clientX-(20*Math.max(1,this.placingService.boardScale))}px`;
+			this.placingItemRef.nativeElement.style.top = `${e.touches[0].clientY-(20*Math.max(1,this.placingService.boardScale))}px`;
+		}
 	}
 
 	showInfo(item: MenuItem<any>){

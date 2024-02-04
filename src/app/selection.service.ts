@@ -48,6 +48,7 @@ export class SelectionService {
 		if(this.currentSelections.indexOf(selection) == -1){ // Add to current selections
 			if(multiple){ // Add to current multiple selections
 				selection.anchorRef.nativeElement.classList.add("is-current-selection")
+				selection.cdRef.reattach();
 				this.currentSelections.push(selection);
 				// Look if the component is connected to already selected component
 				let selectionOutputPort = selection.getLogicComponent().getPort(true);
@@ -100,7 +101,9 @@ export class SelectionService {
 			else{ // Set as currently selected
 				for(let oldSelection of this.currentSelections){
 					oldSelection.anchorRef.nativeElement.classList.remove("is-current-selection")
+					oldSelection.cdRef.detach();
 				}
+				selection.cdRef.reattach();
 				selection.anchorRef.nativeElement.classList.add("is-current-selection")
 				this.currentSelections = [selection];
 				this.clearCurrentConnectionSelections();
@@ -115,6 +118,7 @@ export class SelectionService {
 	clearSelection(){
 		for(let selection of this.currentSelections){
 			selection.anchorRef.nativeElement.classList.remove("is-current-selection")
+			selection.cdRef.detach();
 		}  
 		this.currentSelections = [];
 		this.fireChangeSelection({});
@@ -259,11 +263,21 @@ export class SelectionService {
 		this.selectionPrevY = e.clientY;
 	}
 
-	public moveComponents = (event: MouseEvent, scale: number): void => {
+	public moveComponents = (event: Event, scale: number): void => {
+		let cX = 0;
+		let cY = 0;
+		if(event instanceof MouseEvent){
+			cX = event.clientX;
+			cY = event.clientY;
+		}
+		else if(event instanceof TouchEvent){
+			cX = event.touches[0].clientX;
+			cY = event.touches[0].clientY;
+		}
 		for(let selection of this.currentSelections){
 			selection.setPosition(
-				selection.getLogicComponent().options.X - (this.prevX - event.clientX) / scale, 
-				selection.getLogicComponent().options.Y - (this.prevY - event.clientY) / scale
+				selection.getLogicComponent().options.X - (this.prevX - cX) / scale, 
+				selection.getLogicComponent().options.Y - (this.prevY - cY) / scale
 			);
 			
 		}
@@ -273,19 +287,15 @@ export class SelectionService {
 					return i!==0 && i < connection.LogicConnection.lineBreaks.length-1;
 				}).forEach(br => {
 					let lineBreak = this.convertLineBreak(
-						{x: br.x - (this.prevX - event.clientX) / scale,
-						y: br.y - (this.prevY - event.clientY) / scale})
+						{x: br.x - (this.prevX - cX) / scale,
+						y: br.y - (this.prevY - cY) / scale})
 					br.x = lineBreak.x;
 					br.y = lineBreak.y;
 				})
 			}
 		}
-		this.prevX = this.convertScaledPosition(event.clientX, scale);
-		this.prevY = this.convertScaledPosition(event.clientY, scale);
-	}
-
-	moveSelectedConnections(event: MouseEvent, boardScale: number) {
-		
+		this.prevX = this.convertScaledPosition(cX, scale);
+		this.prevY = this.convertScaledPosition(cY, scale);
 	}
 
 	private convertLineBreak(lineBreak: LineBreak){

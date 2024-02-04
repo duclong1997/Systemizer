@@ -10,10 +10,25 @@ export interface ReceiveDataEvent { }
 export interface FailedConnectEvent { message: string; }
 
 export interface IDataOperator{
-    options: Options;
+
+    /**
+     * A unique component ID
+     */
     originID: string;
 
+    /**
+     * Component options
+     */
+    options: Options;
+
+    /**
+     * Color of component on board
+     */
     color: string;
+
+    /**
+     * Whether to make background or border of component colored
+     */
     fillColor: boolean;
 
     /**
@@ -29,7 +44,7 @@ export interface IDataOperator{
     /**
      * connectTo: connects to other operator via port
      */
-    connectTo(operator: IDataOperator, connectingWithOutput: boolean, connectingToOutput: boolean): Connection;
+    connectTo(operator: IDataOperator, connectingWithOutput: boolean): Connection;
 
     /**
      * canConnectTo: return true if operator can connect to given port with wanted port

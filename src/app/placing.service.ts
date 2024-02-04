@@ -20,7 +20,7 @@ class CopiedItem {
 export class PlacingService{
 
 	@Output() componentChanged = new EventEmitter();
-	@Output() showComponentConextMenu = new EventEmitter<any>();
+	@Output() showComponentContextMenu = new EventEmitter<any>();
 	@Output() pushComponent = new EventEmitter<OperatorComponent>();
 
 	isPlacing = false;
@@ -77,6 +77,7 @@ export class PlacingService{
 		let board = document.getElementById("board");
 		board.classList.add("infocus");
 		board.onmousemove = null;
+		board.ontouchmove = null;
 		this.isConnecting = false;
 		this.connectingPort = null;
 	}
@@ -178,7 +179,7 @@ export class PlacingService{
 		let factory : ComponentFactory<ConnectionComponent> = this.resolver.resolveComponentFactory(ConnectionComponent);
 		let c : ComponentRef<ConnectionComponent>  = this.connectionRef.createComponent(factory);
 
-		let logicConn = portComponent1.LogicPort.parent.connectTo(portComponent2.LogicPort.parent, portComponent1.IsOutput, portComponent2.IsOutput);
+		let logicConn = portComponent1.LogicPort.parent.connectTo(portComponent2.LogicPort.parent, portComponent1.IsOutput);
 		if(logicConn == null){
 			c.destroy();
 			return false;
@@ -220,7 +221,7 @@ export class PlacingService{
 			this.componentChanged.emit();
 		})
 		c.instance.showContextMenu.subscribe((e)=>{
-			this.showComponentConextMenu.emit({
+			this.showComponentContextMenu.emit({
 				x: c.instance.getLogicComponent().options.X + e.offsetX,
 				y: c.instance.getLogicComponent().options.Y + e.offsetY,
 			});

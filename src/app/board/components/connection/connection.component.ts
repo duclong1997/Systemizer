@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, OnInit, ViewChild } from '@angular/core';
 import { SelectionService } from 'src/app/selection.service';
+import { ViewingService } from 'src/app/viewing.service';
 import { Connection, LineBreak } from 'src/models/Connection';
 import { createRoundedPath, UUID } from 'src/shared/ExtensionMethods';
 import { PortComponent } from '../port/port.component';
@@ -35,10 +36,12 @@ export class ConnectionComponent implements OnInit {
 	titlePopupX: number = 0;
 	titlePopupY: number = 0;
 
-	constructor(private cdRef: ChangeDetectorRef, public selectionService: SelectionService){
+	constructor(private cdRef: ChangeDetectorRef, public selectionService: SelectionService, private viewingService: ViewingService){
+		cdRef.detach();
 	}
 
 	ngOnInit(): void {
+		this.cdRef.detectChanges();
 		this.portComponent1.LogicPort.onRemoveConnection((conn) => {
 			if(conn === this.LogicConnection){
 				this.destroyComponent();
@@ -60,6 +63,11 @@ export class ConnectionComponent implements OnInit {
 			let anim = document.createElementNS('http://www.w3.org/2000/svg','animateMotion');
 			let delay = Math.max(this.mainPath.nativeElement.getTotalLength(), 230);
 
+			if(this.viewingService.isResponsesHidden() && port !== this.portComponent1.LogicPort){
+				this.LogicConnection.getSendDataDelay = () => {return delay}
+				return;
+			}
+			
 			anim.setAttribute("attributeName", "cx");
 
 			anim.setAttribute("dur", `${delay+20}ms`);
@@ -85,7 +93,9 @@ export class ConnectionComponent implements OnInit {
 			dataSvg.appendChild(anim);
 
 			(anim as any).beginElement();
-			dataSvg.style.display = "block"
+			setTimeout(() => {
+				dataSvg.style.display = "block"
+			}, 10)
 			setTimeout(()=>{
 				dataSvg.remove();
 			},delay)
@@ -133,7 +143,7 @@ export class ConnectionComponent implements OnInit {
 		}
 	}
 
-	breakLine(previous: LineBreak, next: LineBreak, event: MouseEvent){
+	breakLine(previous: LineBreak, next: LineBreak, event: Event){
 		let line = new LineBreak(
 			(previous.x + next.x)/2,
 			(previous.y + next.y)/2);
@@ -145,7 +155,7 @@ export class ConnectionComponent implements OnInit {
 		this.moveLine(line, event);
 	}
 
-	moveLine(line: LineBreak, event: MouseEvent){
+	moveLine(line: LineBreak, event: Event){
 		if(this.selectionService.currentConnectionSelections.length === 0)
 			this.selectionService.setLineBreakSelection(line, this.LogicConnection.lineBreaks);
 		let index = this.LogicConnection.lineBreaks.findIndex(br => br.x === line.x && br.y === line.y);
@@ -154,49 +164,101 @@ export class ConnectionComponent implements OnInit {
 		let board = document.getElementById("board");
 		this.lineCurrX = line.x;
 		this.lineCurrY = line.y;
-		this.linePrevX = event.clientX;
-		this.linePrevY = event.clientY;
+		this.linePrevX = 0;
+		this.linePrevY = 0;
 
-		board.onmousemove = (e: MouseEvent) => {
-			this.lineCurrX = this.lineCurrX - (this.linePrevX - e.clientX) / this.portComponent1.placingService.boardScale;
-			this.lineCurrY = this.lineCurrY - (this.linePrevY - e.clientY) / this.portComponent1.placingService.boardScale;
+		if(event instanceof MouseEvent){
+			this.linePrevX = event.clientX;
+			this.linePrevY = event.clientY;
 
-			let moveX = true;
-			let moveY = true;
-
-			const SNAP_ANGLE = 10;
-
-			let diffNextX = Math.abs(this.lineCurrX - next.x);
-			let diffNextY = Math.abs(this.lineCurrY - next.y);
-			let diffPrevX = Math.abs(this.lineCurrX - prev.x);
-			let diffPrevY = Math.abs(this.lineCurrY - prev.y);
-			if(diffNextY < SNAP_ANGLE){
-				line.y = next.y;
-				moveY = false
+			board.onmousemove = (e: MouseEvent) => {
+				this.lineCurrX = this.lineCurrX - (this.linePrevX - e.clientX) / this.portComponent1.placingService.boardScale;
+				this.lineCurrY = this.lineCurrY - (this.linePrevY - e.clientY) / this.portComponent1.placingService.boardScale;
+	
+				let moveX = true;
+				let moveY = true;
+	
+				const SNAP_ANGLE = 10;
+	
+				let diffNextX = Math.abs(this.lineCurrX - next.x);
+				let diffNextY = Math.abs(this.lineCurrY - next.y);
+				let diffPrevX = Math.abs(this.lineCurrX - prev.x);
+				let diffPrevY = Math.abs(this.lineCurrY - prev.y);
+				if(diffNextY < SNAP_ANGLE){
+					line.y = next.y;
+					moveY = false
+				}
+				else if(diffNextX < SNAP_ANGLE){
+					line.x = next.x;
+					moveX = false;
+				}
+				if(diffPrevY < SNAP_ANGLE){
+					line.y = prev.y;
+					moveY = false;
+				}
+				else if(diffPrevX < SNAP_ANGLE){
+					line.x = prev.x;
+					moveX = false;
+				}
+				if(moveX)
+					line.x = this.lineCurrX;
+				if(moveY)
+					line.y = this.lineCurrY;
+	
+				this.linePrevX = e.clientX;
+				this.linePrevY = e.clientY;
 			}
-			else if(diffNextX < SNAP_ANGLE){
-				line.x = next.x;
-				moveX = false;
+			window.onmouseup = () => {
+				board.onmousemove = null;
+				window.onmouseup = null;
 			}
-			if(diffPrevY < SNAP_ANGLE){
-				line.y = prev.y;
-				moveY = false;
-			}
-			else if(diffPrevX < SNAP_ANGLE){
-				line.x = prev.x;
-				moveX = false;
-			}
-			if(moveX)
-				line.x = this.lineCurrX;
-			if(moveY)
-				line.y = this.lineCurrY;
-
-			this.linePrevX = e.clientX;
-			this.linePrevY = e.clientY;
 		}
-		window.onmouseup = () => {
-			board.onmousemove = null;
-			window.onmouseup = null;
+		else if(event instanceof TouchEvent){
+			this.linePrevX = event.touches[0].clientX;
+			this.linePrevY = event.touches[0].clientY;
+			
+			board.ontouchmove = (e: TouchEvent) => {
+				this.lineCurrX = this.lineCurrX - (this.linePrevX - e.touches[0].clientX) / this.portComponent1.placingService.boardScale;
+				this.lineCurrY = this.lineCurrY - (this.linePrevY - e.touches[0].clientY) / this.portComponent1.placingService.boardScale;
+
+				let moveX = true;
+				let moveY = true;
+
+				const SNAP_ANGLE = 10;
+
+				let diffNextX = Math.abs(this.lineCurrX - next.x);
+				let diffNextY = Math.abs(this.lineCurrY - next.y);
+				let diffPrevX = Math.abs(this.lineCurrX - prev.x);
+				let diffPrevY = Math.abs(this.lineCurrY - prev.y);
+				if(diffNextY < SNAP_ANGLE){
+					line.y = next.y;
+					moveY = false
+				}
+				else if(diffNextX < SNAP_ANGLE){
+					line.x = next.x;
+					moveX = false;
+				}
+				if(diffPrevY < SNAP_ANGLE){
+					line.y = prev.y;
+					moveY = false;
+				}
+				else if(diffPrevX < SNAP_ANGLE){
+					line.x = prev.x;
+					moveX = false;
+				}
+				if(moveX)
+					line.x = this.lineCurrX;
+				if(moveY)
+					line.y = this.lineCurrY;
+
+				this.linePrevX = e.touches[0].clientX;
+				this.linePrevY = e.touches[0].clientY;
+			}
+		
+			window.ontouchend = () => {
+				board.ontouchmove = null;
+				window.ontouchend = null;
+			}
 		}
 	}
 }

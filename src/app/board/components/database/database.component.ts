@@ -1,6 +1,4 @@
-import { Component, ComponentFactoryResolver, OnInit, ViewChild, ViewContainerRef } from '@angular/core';
-import { PlacingService } from 'src/app/placing.service';
-import { SelectionService } from 'src/app/selection.service';
+import { Component, OnInit } from '@angular/core';
 import { Database, DatabaseOptions } from 'src/models/Database';
 import { DatabaseEndpoint } from 'src/models/Endpoint';
 import { Port } from 'src/models/Port';
@@ -8,12 +6,6 @@ import { OperatorComponent } from '../Shared/OperatorComponent';
 
 @Component({
 	selector: 'database',
-	queries: {
-		anchorRef: new ViewChild( "anchorRef" ),
-		optionsRef: new ViewChild( "options" ),
-		actionsRef: new ViewChild("actions"),
-		outputPortRef: new ViewChild("outputPort")
-	},
 	templateUrl: './database.component.html',
 	styleUrls: ['./database.component.scss']
 })
@@ -22,27 +14,15 @@ export class DatabaseComponent extends OperatorComponent implements OnInit {
 	public LogicDatabase : Database = new Database();
 	SHARDS_PER_SHRARD = 3;
 
-	@ViewChild("conn", { read: ViewContainerRef }) conn;
-
-	constructor(placingService: PlacingService, selectionService: SelectionService, resolver: ComponentFactoryResolver){
-		super(placingService, selectionService, resolver);
-	}
-
 	ngAfterViewInit(): void {
 		if(this.LogicDatabase.options.isMasterShard){
 			this.LogicDatabase.outputPort = new Port(this.LogicDatabase,true,true);
 		}
-		super.Init(this.conn);
+		super.Init();
 		this.LogicDatabase.onRemoveShard(()=>{
 			this.outputPortRef.destroySelf()
 			this.outputPortRef = null;
 		})
-	}
-
-	ngOnInit(){}
-
-	getActionsElement(){
-		return this.actionsRef;
 	}
 
 	public getLogicComponent(){
@@ -61,6 +41,7 @@ export class DatabaseComponent extends OperatorComponent implements OnInit {
 
 	createOutputPort(){
 		this.LogicDatabase.outputPort = new Port(this.LogicDatabase,true,true);
+		this.cdRef.detectChanges();
 		this.createPort(true);
 	}
 
@@ -99,6 +80,7 @@ export class DatabaseComponent extends OperatorComponent implements OnInit {
 		}
 		setTimeout(()=>{
 			this.afterChange();
+			this.cdRef.detectChanges();
 		}, 300);
 	}
 

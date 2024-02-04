@@ -23,6 +23,7 @@ export class EndpointRef {
 export class EndpointAction {
     endpoint: Endpoint;
     method: EndpointActionHTTPMethod = EndpointActionHTTPMethod.Inherit;
+    asynchronous: boolean = false;
 }
 
 export class DatabaseEndpoint extends Endpoint{
@@ -31,11 +32,5 @@ export class DatabaseEndpoint extends Endpoint{
         this.actions = null;
         this.grpcMode = gRPCMode.Unary;
         this.protocol = Protocol.Database
-    }
-}
-
-export class MQEndpoint extends Endpoint{
-    constructor(url = "Message Queue"){
-        super(url, [HTTPMethod.GET, HTTPMethod.POST, HTTPMethod.PUT, HTTPMethod.DELETE, HTTPMethod.PATCH])
     }
 }

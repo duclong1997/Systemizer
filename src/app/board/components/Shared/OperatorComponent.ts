@@ -1,8 +1,10 @@
-import { ComponentFactoryResolver, ElementRef, EventEmitter, ViewContainerRef } from "@angular/core";
+import { ChangeDetectorRef, Component, ComponentFactoryResolver, ElementRef, EventEmitter, ViewChild, ViewContainerRef } from "@angular/core";
 import { PlacingService } from "src/app/placing.service";
 import { SelectionService } from "src/app/selection.service";
+import { SimulationService } from "src/app/simulation.service";
+import { ViewingService } from "src/app/viewing.service";
 import { IDataOperator } from "src/interfaces/IDataOperator";
-import { Endpoint, MQEndpoint } from "src/models/Endpoint";
+import { EndpointOperator } from "src/models/EndpointOperator";
 import { APIType } from "src/models/enums/APIType";
 import { BalancingAlgorithm } from "src/models/enums/BalancingAlgorithm";
 import { DatabaseType } from "src/models/enums/DatabaseType";
@@ -16,14 +18,19 @@ import { WritePolicy } from "src/models/enums/WritePolicy";
 import { Options } from "src/models/Options";
 import { clone, getFormattedMethod } from "src/shared/ExtensionMethods";
 import { PortComponent } from "../port/port.component";
+import { SimulationCardComponent } from "./simulation-card/simulation-card.component";
 import { TitleComponent } from "./title/title.component";
 
-interface Position{
-    top: number;
-    left: number;
-}
-
-export class OperatorComponent {
+@Component({
+	template: '',
+	queries: {
+		anchorRef: new ViewChild( "anchorRef" ),
+		optionsRef: new ViewChild( "options" ),
+		actionsRef: new ViewChild("actions"),
+		simulationsRef: new ViewChild("simulations")
+	},
+})
+export abstract class OperatorComponent {
 
 	hasChanged = new EventEmitter();
 	showContextMenu = new EventEmitter();
@@ -52,18 +59,14 @@ export class OperatorComponent {
 	public ReplacementPolicy: typeof ReplacementPolicy = ReplacementPolicy;
 	public ReplacementPolicyKeys = Object.values(ReplacementPolicy).filter(k => !isNaN(Number(k)));
 
-    public placingService: PlacingService;
-    private selectionService: SelectionService;
-	private resolver: ComponentFactoryResolver;
+	@ViewChild("conn", { read: ViewContainerRef }) conn: ViewContainerRef;
 
-	conn: ViewContainerRef;
-
-    public anchorMouseOffset: Position;
 	public anchorRef!: ElementRef;
 
 	private LogicComponent: IDataOperator;
 	public optionsRef: ElementRef;
 	public actionsRef: ElementRef;
+	public simulationsRef: ElementRef;
 	public inputPortRef: PortComponent;
 	public outputPortRef: PortComponent;
 
@@ -76,41 +79,56 @@ export class OperatorComponent {
 
 	public beforeOptions: Options;
 
-    constructor(placingService: PlacingService, selectionService: SelectionService, resolver: ComponentFactoryResolver) {
-		this.placingService = placingService;
-        this.selectionService = selectionService;
-		this.resolver = resolver
+    constructor(protected placingService: PlacingService, protected selectionService: SelectionService, protected resolver: ComponentFactoryResolver, public cdRef: ChangeDetectorRef, private viewingService: ViewingService, private simulationService: SimulationService) {
+		this.cdRef.detach();
 	}
 
-  	public handleMousedown(event: MouseEvent): void {
+	ngAfterViewInit(): void {
+		this.Init();
+  	}
+
+	ngOnInit(){
+		this.cdRef.detectChanges();
+	}
+
+  	public handleMousedown(event: Event): void {
 		if(this.placingService.isConnecting) 
 			return;
-		if(event.button != 0){
-			event.preventDefault();
-			if(event.button == 2){
-				this.selectionService.addSelection(this, false);
-				this.showContextMenu.emit(event);
-			}
-			return;
-		}
+		event.preventDefault();
 		this.handleClick(event);
 		this.placingService.startPlacing();
-
-		event.preventDefault();
 
 		this.anchorRect = this.anchorRef.nativeElement.getBoundingClientRect();
 		this.maxX = this.placingService.boardWidth;
 		this.maxY = this.placingService.boardHeight;
+		if(event instanceof MouseEvent){
+			if(event.button != 0){
+				this.placingService.stopPlacing();
+				event.preventDefault();
+				if(event.button == 2){
+					this.selectionService.addSelection(this, false);
+					this.showContextMenu.emit(event);
+				}
+				return;
+			}
+	
+			this.selectionService.prevX = event.clientX;
+			this.selectionService.prevY = event.clientY;
+	
+			this.board.addEventListener( "mousemove", this.handleMousemove );
+			window.addEventListener( "mouseup", this.handleMouseup );
+		}
+		else if(event instanceof TouchEvent){
 
-		this.selectionService.prevX = event.clientX;
-		this.selectionService.prevY = event.clientY;
-
-		this.board.addEventListener( "mousemove", this.handleMousemove );
-		this.selectionService.moveSelectedConnections(event, this.placingService.boardScale); // Move connections
-		window.addEventListener( "mouseup", this.handleMouseup );
+			this.selectionService.prevX = event.touches[0].clientX;
+			this.selectionService.prevY = event.touches[0].clientY;
+	
+			this.board.addEventListener( "touchmove", this.handleMousemove );
+			window.addEventListener( "touchend", this.handleMouseup );
+		}
 	}
 
-  	public handleMousemove = (event: MouseEvent): void => {
+  	public handleMousemove = (event: Event): void => {
 		this.selectionService.moveComponents(event, this.placingService.boardScale);
 	}
 
@@ -121,6 +139,7 @@ export class OperatorComponent {
 	public setPosition(x: number, y: number){
 		this.LogicComponent.options.X = Math.max(Math.min( this.maxX - this.anchorRect.width  / this.placingService.boardScale, this.convertPosition(x)), 0);
 		this.LogicComponent.options.Y = Math.max(Math.min( this.maxY - this.anchorRect.height / this.placingService.boardScale, this.convertPosition(y)), 0);
+		this.cdRef.detectChanges();
 	}
 
 	public handleMouseup = (): void => {
@@ -134,8 +153,9 @@ export class OperatorComponent {
 		}		
 	}
 
-	public handleClick(event: MouseEvent){
-		this.selectionService.addSelection(this, event.ctrlKey);
+	public handleClick(event: Event){
+		if(event instanceof MouseEvent || event instanceof TouchEvent)
+			this.selectionService.addSelection(this, event.ctrlKey);
 	}
 
 	public getLogicComponent(): IDataOperator{
@@ -154,7 +174,7 @@ export class OperatorComponent {
 
 	/**
 	 * 
-	 * @returns options element, null if component doesnt have any options
+	 * @returns options element, null if component doesn't have any options
 	 */
 	public getOptionsElement(): ElementRef{
 		return this.optionsRef;
@@ -162,16 +182,25 @@ export class OperatorComponent {
 
 	/**
 	 * 
-	 * @returns actions element, null if component doesnt have any actions
+	 * @returns actions element, null if component doesn't have any actions
 	 */
 	public getActionsElement(): ElementRef{
 		return this.actionsRef;
+	}
+
+	/**
+	 * 
+	 * @returns simulations element, null if component doesn't have any actions
+	 */
+	 public getSimulationsElement(): ElementRef{
+		return this.simulationsRef;
 	}
 
 	destroyComponent = () => {}
 
 	changeTitle(title: string){
 		this.LogicComponent.options.title = title;
+		this.cdRef.detectChanges();
 	}
 
 	showStatusCode(code: HTTPStatus){
@@ -200,16 +229,29 @@ export class OperatorComponent {
 		this.anchorRef.nativeElement.appendChild(span);
 		setTimeout(() => {
 			this.anchorRef.nativeElement.removeChild(span);
+			this.cdRef.detectChanges();
 		}, 1500);
+		this.cdRef.detectChanges();
 	}
 
 	destroySelf = () => {
 		this.LogicComponent.destroy();
 		this.destroyComponent();
+		this.cdRef.detectChanges();
 	}
 
-	Init(conn: ViewContainerRef, generateTitle: boolean = true): void {
-		this.conn = conn;
+	setReceiveDataAnimation(){
+		if(this.viewingService.isPerformanceMode())
+			return;
+		if(!this.comp.classList.contains("anim")){
+			this.comp.classList.add("anim");
+			setTimeout(()=>{
+				this.comp.classList.remove("anim");
+			},500);
+		}
+	}
+
+	Init(generateTitle: boolean = true): void {
 		this.LogicComponent = this.getLogicComponent();
 		this.board = document.getElementById("board");
 		this.comp = this.anchorRef.nativeElement;
@@ -226,21 +268,30 @@ export class OperatorComponent {
 		}
 		if(this.isReadOnly)
 			this.comp.classList.add("read-only")
+
 		this.anchorRect = this.anchorRef.nativeElement.getBoundingClientRect();
 		this.maxX = this.placingService.boardWidth;
 		this.maxY = this.placingService.boardHeight;
+
+	
+
 		this.LogicComponent.onShowStatusCode((code:HTTPStatus)=>{
 			this.showStatusCode(code);
 		});
 
 		this.LogicComponent.onReceiveData((data) => {
-			if(!this.comp.classList.contains("anim")){
-				this.comp.classList.add("anim");
-				setTimeout(()=>{
-					this.comp.classList.remove("anim");
-				},500);
-			}
+			this.setReceiveDataAnimation();
     	});
+
+		if(this.LogicComponent instanceof EndpointOperator){
+			if(this.simulationService.isFlowSimulationOn){
+				this.LogicComponent.isFlowSimulationOn = true;
+			}
+			this.LogicComponent.onSimulationStateUpdated((state) => {
+				this.cdRef.detectChanges();
+			})
+			this.createSimulationCard();
+		}
 
 		this.LogicComponent.onFailedConnect((data) => {
 			this.placingService.showSnack(data.message);
@@ -251,17 +302,21 @@ export class OperatorComponent {
 		let inputPort = this.LogicComponent["inputPort"];
 		let outputPort = this.LogicComponent["outputPort"];
 
-		if(this.conn == null)
+		if(this.conn == null){
+			this.cdRef.detectChanges();
 			return;
+		}
 		
 		if(generateTitle)
-			setTimeout(()=>{this.generateTitle();}, 100); 
+			this.generateTitle();
+
 
 		if(inputPort != null)
 			this.createPort(false);
 		if(outputPort != null)
 			this.createPort(true);
 		this.onViewInit.forEach(e => e());
+		this.cdRef.detectChanges();
 	}
 
 	createPort(output = false){
@@ -270,6 +325,7 @@ export class OperatorComponent {
 
 		ref.instance.IsOutput = output;
 		ref.instance.LogicParent = this.LogicComponent;
+		ref.instance.IsReadOnly = this.isReadOnly;
 		ref.instance.LogicPort = this.LogicComponent[output ? "outputPort" : "inputPort"];
 
 		ref.instance.destroySelf = () => {
@@ -282,29 +338,35 @@ export class OperatorComponent {
 			this.outputPortRef = ref.instance;
 		else
 			this.inputPortRef = ref.instance;
+		this.cdRef.detectChanges();
+	}
+
+	createSimulationCard(){
+		let factory  = this.resolver.resolveComponentFactory(SimulationCardComponent);
+		let ref = this.conn.createComponent(factory);
+
+		ref.instance.Model = this.LogicComponent;
+		this.cdRef.detectChanges();
 	}
 
 	generateTitle(){
 		let factory  = this.resolver.resolveComponentFactory(TitleComponent);
 		let ref = this.conn.createComponent(factory);
-
+		
 		ref.instance.Model = this.LogicComponent;
+		this.cdRef.detectChanges();
 	}
 
 	formatMethod(method: HTTPMethod, isDatabase: boolean){
 		return getFormattedMethod(method, isDatabase);
 	}
 
-	isMQEndpoint(endpoint: Endpoint){
-		return endpoint instanceof MQEndpoint;
-	}
-
-	afterChange(){
+	afterChange = () => {
 		this.hasChanged.emit();
 		this.beforeOptions = clone(this.LogicComponent.options);
 	}
-
+	
 	static getColor(): string{
-		return "6059DF";
+		return "#6059DF";
 	}
 }

@@ -8,16 +8,15 @@
         <div class="message empty" *ngFor="let num of [].constructor(10)"></div>
     </div>  
     <div class="img-container messages" (mousedown)="handleMousedown( $event )"
-    (click)="handleClick($event)">
+    (click)="handleClick($event)" (touchstart)="handleMousedown($event)">
         <div class="message img" [style.backgroundColor]="LogicMessageQueue.color" *ngFor="let message of LogicMessageQueue.messages | slice:0:10;"></div>
-        <div class="message fill" *ngFor="let num of [].constructor(10)"></div>
     </div>  
 </div>
 <div style="display:none">
     <div #options>
         <div class="options-endpoints-container">
             <div class="options-endpoints-top">
-                <span class="property-name">Endpoints: <info-tooltip [Message]="'A message queue endpoint. The message queue will publish data to this endpoint (By default set to name of the component).'"></info-tooltip></span>
+                <span class="property-name">Endpoints: <info-tooltip [Message]="'A message queue endpoint. Any consumers must have an endpoint with the same url.'"></info-tooltip></span>
             </div>
             <div class="options-endpoints">
                 <div class="options-endpoint" *ngFor="let endpoint of this.LogicMessageQueue.options.endpoints">
@@ -25,5 +24,11 @@
                 </div>
             </div>
         </div>
+    </div>
+    <div #simulations>
+        <slider-described
+        [Model]="LogicMessageQueue"
+        [AfterChange]="afterChange"
+        ></slider-described>
     </div>
 </div>
