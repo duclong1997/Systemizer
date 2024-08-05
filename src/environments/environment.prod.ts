@@ -1,3 +1,3 @@
 export const environment = {
   production: true
-, buildHash: '1722869278198'};
+, buildHash: '1722870251958'};

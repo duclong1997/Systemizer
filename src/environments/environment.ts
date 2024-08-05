@@ -4,7 +4,7 @@
 
 export const environment = {
   production: false
-, buildHash: '1722869278198'};
+, buildHash: '1722870251958'};
 
 /*
  * For easier debugging in development mode, you can import the following file
