@@ -1,6 +1,6 @@
 {
   "name": "systemizer",
-  "version": "0.0.0",
+  "version": "1.0.4-d37ed35bb6aa4f3c8a46d339c05cf713",
   "scripts": {
     "prebuild": "node generate-build-hash.js",
     "ng": "ng",
